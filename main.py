@@ -1,17 +1,17 @@
 # -*- coding: UTF-8 -*-
 
-import pandas as pd
-import numpy as np
+import logging
 import os
 import sys
 import time
-import logging
 from logging.handlers import RotatingFileHandler
+
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
+import numpy as np
+
 from data.data_generator import Data
 
-frame = "tensorflow"  # 可选： "pytorch", "tensorflow"
+frame = "tensorflow"
 if frame == "pytorch":
     from model.model_pytorch import train, predict
 elif frame == "tensorflow":
@@ -32,8 +32,8 @@ class Config:
 
     feature_columns = list(range(1, 29))  # 要作为feature的列，按原数据从0开始计算，也可以用list 如 [2,4,6,8] 设置
     label_columns = [3, 4]  # 要预测的列，按原数据从0开始计算, 如同时预测第四，五列 最低价和最高价
-    # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行
-    label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(feature_columns, label_columns)  # 因为feature不一定从0开始
+    # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行因为feature不一定从0开始
+    label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(feature_columns, label_columns)
 
     predict_day = 1  # 预测未来几天
 
@@ -160,9 +160,10 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     label_X = range(origin_data.data_num - origin_data.train_num - origin_data.start_num_in_test)
     predict_X = [x + config.predict_day for x in label_X]
 
+    plot_list = []  # 存储所有预测图的列表
     if not sys.platform.startswith('linux'):  # 无桌面的Linux下无法输出，如果是有桌面的Linux，如Ubuntu，可去掉这一行
         for i in range(label_column_num):
-            plt.figure(i + 1)  # 预测数据绘制
+            fig = plt.figure(i + 1)  # 预测数据绘制
             plt.plot(label_X, label_data[:, i], label='label')
             plt.plot(predict_X, predict_data[:, i], label='predict')
             plt.legend()
@@ -173,8 +174,9 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
                 plt.savefig(
                     config.figure_save_path + "{}predict_{}_with_{}.png".format(config.continue_flag, label_name[i],
                                                                                 config.used_frame))
-
+            plot_list.append(fig)  # 添加预测图到列表中
         plt.show()
+    return plot_list
 
 
 def main(config):

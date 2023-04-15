@@ -1,10 +1,9 @@
 # -*- coding = utf-8 -*-
 
-import numpy as np
-import pandas as pd
 import akshare as ak
-from utils.index_calculator import *
 from sklearn.model_selection import train_test_split
+
+from utils.index_calculator import *
 
 
 class Data:
