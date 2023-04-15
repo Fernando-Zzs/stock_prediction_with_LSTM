@@ -9,8 +9,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from data.data_generator import Data
 
-frame = "tensorflow"  # 可选： "keras", "pytorch", "tensorflow"
+frame = "tensorflow"  # 可选： "pytorch", "tensorflow"
 if frame == "pytorch":
     from model.model_pytorch import train, predict
 elif frame == "tensorflow":
@@ -23,12 +24,18 @@ else:
 
 class Config:
     # 数据参数
-    feature_columns = list(range(2, 9))  # 要作为feature的列，按原数据从0开始计算，也可以用list 如 [2,4,6,8] 设置
-    label_columns = [4, 5]  # 要预测的列，按原数据从0开始计算, 如同时预测第四，五列 最低价和最高价
+    stock_code = "000001"
+    start_date = "20170301"
+    end_date = "20230411"
+    fq_method = "qfq"
+    period = "daily"
+
+    feature_columns = list(range(1, 29))  # 要作为feature的列，按原数据从0开始计算，也可以用list 如 [2,4,6,8] 设置
+    label_columns = [3, 4]  # 要预测的列，按原数据从0开始计算, 如同时预测第四，五列 最低价和最高价
     # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行
     label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(feature_columns, label_columns)  # 因为feature不一定从0开始
 
-    predict_day = 5  # 预测未来几天
+    predict_day = 1  # 预测未来几天
 
     # 网络参数
     input_size = len(feature_columns)
@@ -72,7 +79,7 @@ class Config:
     model_name = "model_" + continue_flag + used_frame + model_postfix[used_frame]
 
     # 路径参数
-    train_data_path = "./data/stock_data.csv"
+    train_data_path = "./data/stock.xlsx"
     model_save_path = "./checkpoint/" + used_frame + "/"
     figure_save_path = "./figure/"
     log_save_path = "./log/"
@@ -88,75 +95,6 @@ class Config:
         cur_time = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
         log_save_path = log_save_path + cur_time + '_' + used_frame + "/"
         os.makedirs(log_save_path)
-
-
-class Data:
-    def __init__(self, config):
-        self.config = config
-        self.data, self.data_column_name = self.read_data()
-
-        self.data_num = self.data.shape[0]
-        self.train_num = int(self.data_num * self.config.train_data_rate)
-
-        self.mean = np.mean(self.data, axis=0)  # 数据的均值和方差
-        self.std = np.std(self.data, axis=0)
-        self.norm_data = (self.data - self.mean) / self.std  # 归一化，去量纲
-
-        self.start_num_in_test = 0  # 测试集中前几天的数据会被删掉，因为它不够一个time_step
-
-    def read_data(self):  # 读取初始数据
-        if self.config.debug_mode:
-            init_data = pd.read_csv(self.config.train_data_path, nrows=self.config.debug_num,
-                                    usecols=self.config.feature_columns)
-        else:
-            init_data = pd.read_csv(self.config.train_data_path, usecols=self.config.feature_columns)
-        return init_data.values, init_data.columns.tolist()  # .columns.tolist() 是获取列名
-
-    def get_train_and_valid_data(self):
-        feature_data = self.norm_data[:self.train_num]
-        label_data = self.norm_data[self.config.predict_day: self.config.predict_day + self.train_num,
-                     self.config.label_in_feature_index]  # 将延后几天的数据作为label
-
-        if not self.config.do_continue_train:
-            # 在非连续训练模式下，每time_step行数据会作为一个样本，两个样本错开一行，比如：1-20行，2-21行。。。。
-            train_x = [feature_data[i:i + self.config.time_step] for i in range(self.train_num - self.config.time_step)]
-            train_y = [label_data[i:i + self.config.time_step] for i in range(self.train_num - self.config.time_step)]
-        else:
-            # 在连续训练模式下，每time_step行数据会作为一个样本，两个样本错开time_step行，
-            # 比如：1-20行，21-40行。。。到数据末尾，然后又是 2-21行，22-41行。。。到数据末尾，……
-            # 这样才可以把上一个样本的final_state作为下一个样本的init_state，而且不能shuffle
-            # 目前本项目中仅能在pytorch的RNN系列模型中用
-            train_x = [
-                feature_data[start_index + i * self.config.time_step: start_index + (i + 1) * self.config.time_step]
-                for start_index in range(self.config.time_step)
-                for i in range((self.train_num - start_index) // self.config.time_step)]
-            train_y = [
-                label_data[start_index + i * self.config.time_step: start_index + (i + 1) * self.config.time_step]
-                for start_index in range(self.config.time_step)
-                for i in range((self.train_num - start_index) // self.config.time_step)]
-
-        train_x, train_y = np.array(train_x), np.array(train_y)
-
-        train_x, valid_x, train_y, valid_y = train_test_split(train_x, train_y, test_size=self.config.valid_data_rate,
-                                                              random_state=self.config.random_seed,
-                                                              shuffle=self.config.shuffle_train_data)  # 划分训练和验证集，并打乱
-        return train_x, valid_x, train_y, valid_y
-
-    def get_test_data(self, return_label_data=False):
-        feature_data = self.norm_data[self.train_num:]
-        sample_interval = min(feature_data.shape[0], self.config.time_step)  # 防止time_step大于测试集数量
-        self.start_num_in_test = feature_data.shape[0] % sample_interval  # 这些天的数据不够一个sample_interval
-        time_step_size = feature_data.shape[0] // sample_interval
-
-        # 在测试数据中，每time_step行数据会作为一个样本，两个样本错开time_step行
-        # 比如：1-20行，21-40行。。。到数据末尾。
-        test_x = [feature_data[
-                  self.start_num_in_test + i * sample_interval: self.start_num_in_test + (i + 1) * sample_interval]
-                  for i in range(time_step_size)]
-        if return_label_data:  # 实际应用中的测试集是没有label数据的
-            label_data = self.norm_data[self.train_num + self.start_num_in_test:, self.config.label_in_feature_index]
-            return np.array(test_x), label_data
-        return np.array(test_x)
 
 
 def load_logger(config):
@@ -196,8 +134,10 @@ def load_logger(config):
 def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarray):
     label_data = origin_data.data[origin_data.train_num + origin_data.start_num_in_test:,
                  config.label_in_feature_index]
-    predict_data = predict_norm_data * origin_data.std[config.label_in_feature_index] + \
-                   origin_data.mean[config.label_in_feature_index]  # 通过保存的均值和方差还原数据
+    # predict_data = predict_norm_data * origin_data.std[config.label_in_feature_index] + \
+    #                origin_data.mean[config.label_in_feature_index]  # 通过保存的均值和方差还原数据
+    predict_data = predict_norm_data * (origin_data.max_val[config.label_in_feature_index] - origin_data.min_val[
+        config.label_in_feature_index]) + origin_data.min_val[config.label_in_feature_index]
     assert label_data.shape[0] == predict_data.shape[0], "The element number in origin and predicted data is different"
 
     label_name = [origin_data.data_column_name[i] for i in config.label_in_feature_index]
@@ -211,7 +151,10 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     # logger.info("The mean squared error of stock {} is ".format(label_name) + str(loss_norm))
 
     loss = np.mean((label_data[config.predict_day:] - predict_data[:-config.predict_day]) ** 2, axis=0)
-    loss_norm = loss / (origin_data.std[config.label_in_feature_index] ** 2)
+    # loss_norm = loss / (origin_data.std[config.label_in_feature_index] ** 2)
+    norm_factor = (origin_data.max_val[config.label_in_feature_index] - origin_data.min_val[
+        config.label_in_feature_index]) ** 2
+    loss_norm = loss * norm_factor
     logger.info("The mean squared error of stock {} is ".format(label_name) + str(loss_norm))
 
     label_X = range(origin_data.data_num - origin_data.train_num - origin_data.start_num_in_test)
@@ -222,6 +165,7 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
             plt.figure(i + 1)  # 预测数据绘制
             plt.plot(label_X, label_data[:, i], label='label')
             plt.plot(predict_X, predict_data[:, i], label='predict')
+            plt.legend()
             plt.title("Predict stock {} price with {}".format(label_name[i], config.used_frame))
             logger.info("The predicted stock {} for the next {} day(s) is: ".format(label_name[i], config.predict_day) +
                         str(np.squeeze(predict_data[-config.predict_day:, i])))
