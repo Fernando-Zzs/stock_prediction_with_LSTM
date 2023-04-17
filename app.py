@@ -5,11 +5,10 @@ from datetime import datetime
 
 import numpy as np
 import streamlit as st
-from dateutil.relativedelta import relativedelta
 
 from data.data_generator import Data
 from main import Config, load_logger, draw
-from utils.date_util import calc_bdate
+from utils.date_util import calc_bdate, gap_period
 
 view_options = {
     '前复权': 'qfq',
@@ -28,14 +27,11 @@ st.sidebar.title("自定义预测参数")
 config = Config()
 
 config.stock_code = st.sidebar.text_input("股票代码", value='000001')
-config.start_date = datetime.strftime(st.sidebar.date_input("起始日期", value=datetime.now() - relativedelta(months=3),
-                                                            max_value=datetime.strptime(config.end_date,
-                                                                                        "%Y%m%d") - relativedelta(
-                                                                months=2)), "%Y%m%d")
+config.start_date = datetime.strftime(
+    st.sidebar.date_input("起始日期", value=gap_period(datetime.strftime(datetime.now(), "%Y%m%d"), 3, True),
+                          max_value=gap_period(config.end_date, 2, True)), "%Y%m%d")
 config.end_date = datetime.strftime(st.sidebar.date_input("结束日期", value=datetime.now(),
-                                                          min_value=datetime.strptime(config.start_date,
-                                                                                      "%Y%m%d") + relativedelta(
-                                                              months=2)), "%Y%m%d")
+                                                          min_value=gap_period(config.start_date, 2, False)), "%Y%m%d")
 config.fq_method = view_options[st.sidebar.radio("复权类型", ('前复权', '后复权'))]
 
 with st.sidebar.expander("网络参数"):
