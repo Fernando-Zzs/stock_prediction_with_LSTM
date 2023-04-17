@@ -131,7 +131,7 @@ def load_logger(config):
     return logger
 
 
-def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarray):
+def tidy(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarray):
     label_data = origin_data.data[origin_data.train_num + origin_data.start_num_in_test:,
                  config.label_in_feature_index]
     # predict_data = predict_norm_data * origin_data.std[config.label_in_feature_index] + \
@@ -141,7 +141,6 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     assert label_data.shape[0] == predict_data.shape[0], "The element number in origin and predicted data is different"
 
     label_name = [origin_data.data_column_name[i] for i in config.label_in_feature_index]
-    label_column_num = len(config.label_columns)
 
     # label 和 predict 是错开config.predict_day天的数据的
     # 下面是两种norm后的loss的计算方式，结果是一样的，可以简单手推一下
@@ -160,6 +159,14 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     label_X = range(origin_data.data_num - origin_data.train_num - origin_data.start_num_in_test)
     predict_X = [x + config.predict_day for x in label_X]
 
+    return label_X, label_data, predict_X, predict_data,
+
+
+def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarray):
+    label_column_num = len(config.label_columns)
+    label_name = [origin_data.data_column_name[i] for i in config.label_in_feature_index]
+    label_X, label_data, predict_X, predict_data = tidy(config, origin_data, logger, predict_norm_data)
+
     plot_list = []  # 存储所有预测图的列表
     if not sys.platform.startswith('linux'):  # 无桌面的Linux下无法输出，如果是有桌面的Linux，如Ubuntu，可去掉这一行
         for i in range(label_column_num):
@@ -177,6 +184,17 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
             plot_list.append(fig)  # 添加预测图到列表中
         plt.show()
     return plot_list
+
+
+# TODO:需要重构，放到其他位置
+view_options = {
+    '前复权': 'qfq',
+    '后复权': 'hfq',
+    '开盘价': 1,
+    '收盘价': 2,
+    '最高价': 3,
+    '最低价': 4
+}
 
 
 def main(config):

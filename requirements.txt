@@ -12,3 +12,4 @@ visdom
 akshare
 streamlit
 dateutil
+altair

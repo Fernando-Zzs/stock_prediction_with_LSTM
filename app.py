@@ -3,21 +3,16 @@
 import importlib
 from datetime import datetime
 
+import altair as alt
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 from data.data_generator import Data
-from main import Config, load_logger, draw
+from main import Config, load_logger, tidy, view_options
 from utils.date_util import calc_bdate, gap_period
 
-view_options = {
-    '前复权': 'qfq',
-    '后复权': 'hfq',
-    '开盘价': 1,
-    '收盘价': 2,
-    '最高价': 3,
-    '最低价': 4
-}
+alt.themes.enable("streamlit")
 
 # 设置应用程序的标题和页眉
 st.set_page_config(page_title="Stock Price Predictor", page_icon=":chart_with_upwards_trend:", layout="wide")
@@ -28,10 +23,10 @@ config = Config()
 st.sidebar.markdown('---')
 config.stock_code = st.sidebar.text_input("股票代码", value='000001')
 config.start_date = datetime.strftime(
-    st.sidebar.date_input("起始日期", value=gap_period(datetime.strftime(datetime.now(), "%Y%m%d"), 3, True),
-                          max_value=gap_period(config.end_date, 2, True)), "%Y%m%d")
+    st.sidebar.date_input("起始日期", value=gap_period(datetime.strftime(datetime.now(), "%Y%m%d"), 4, True),
+                          max_value=gap_period(config.end_date, 3, True)), "%Y%m%d")
 config.end_date = datetime.strftime(st.sidebar.date_input("结束日期", value=datetime.now(),
-                                                          min_value=gap_period(config.start_date, 2, False)), "%Y%m%d")
+                                                          min_value=gap_period(config.start_date, 3, False)), "%Y%m%d")
 config.fq_method = view_options[
     st.sidebar.radio("复权类型", ('前复权', '后复权'), horizontal=True, help="选择前复权能够更好地反映短期价格趋势，选择后复权能够更好地反映长期涨跌情况。")]
 st.sidebar.markdown('---')
@@ -43,7 +38,8 @@ with st.sidebar.expander("网络参数"):
     config.lstm_layers = st.slider("堆叠层数", min_value=1, max_value=8, step=1, value=2, help="网络的LSTM堆叠层数")
     config.dropout_rate = st.slider("丢包率", min_value=0.0, max_value=1.0, step=0.05, value=0.2,
                                     help="作用于LSTM网络之间以一定概率丢失数据，防止过拟合")
-    config.time_step = st.number_input("时间步长", min_value=1, max_value=calc_bdate(config.start_date, config.end_date),
+    config.time_step = st.number_input("时间步长", min_value=1,
+                                       max_value=calc_bdate(config.start_date, config.end_date) - 33,
                                        step=1, value=20, help="用前多少天的数据来预测，也是LSTM的time step数")
 
 with st.sidebar.expander("训练参数"):
@@ -57,6 +53,57 @@ with st.sidebar.expander("训练参数"):
 st.sidebar.markdown('---')
 config.label_columns = [view_options[selected_option] for selected_option in
                         st.sidebar.multiselect("预测变量", ['开盘价', '收盘价', '最高价', '最低价'], ['收盘价'])]
+
+
+def get_chart(x1, y1, x2, y2):
+    # 创建一个DataFrame，包含label_X, label_data, predict_X, predict_data四列数据
+    df = pd.DataFrame({
+        'label_X': x1,
+        'label_data': y1,
+        'predict_X': x2,
+        'predict_data': y2
+    })
+
+    # 创建一个用于悬停的selection对象
+    hover = alt.selection_single(
+        fields=['label_X', 'predict_X'],
+        nearest=True,
+        on='mouseover'
+    )
+
+    line_label = alt.Chart(df).mark_line().encode(
+        x='label_X',
+        y='label_data',
+        color=alt.value('blue')
+    )
+
+    line_predict = alt.Chart(df).mark_line().encode(
+        x='predict_X',
+        y='predict_data',
+        color=alt.value('orange')
+    )
+
+    # 创建一个用于悬停的点图层
+    point = alt.Chart(df).mark_circle().encode(
+        x='label_X',
+        y='label_data',
+        opacity=alt.condition(hover, alt.value(1), alt.value(0))  # 根据悬停情况设置点的透明度
+    )
+
+    # 创建一个用于规则图标的图层
+    rule = alt.Chart(df).mark_rule(color='gray').encode(
+        x='label_X',
+        y='label_data',
+        opacity=alt.condition(hover, alt.value(0.3), alt.value(0)),
+        tooltip=[
+            alt.Tooltip("label_X", title="Date"),
+            alt.Tooltip("label_data", title="Price"),
+        ],
+    ).add_selection(hover)
+
+    # 将所有图层叠加在一起，并添加交互特性
+    return (line_label + line_predict + point + rule).interactive()
+
 
 # TODO:运行前需要检查：所有空都有填写,do_continue_train变更时同时变更
 if st.sidebar.button("运行", type='primary', use_container_width=True):
@@ -81,8 +128,13 @@ if st.sidebar.button("运行", type='primary', use_container_width=True):
         if config.do_predict:
             test_X, test_Y = data_gainer.get_test_data(return_label_data=True)
             pred_result = module.predict(config, test_X)  # 这里输出的是未还原的归一化预测数据
-            plot_list = draw(config, data_gainer, logger, pred_result)
-            for fig in plot_list:
-                st.pyplot(fig)
+            # plot_list = draw(config, data_gainer, logger, pred_result)
+            # for fig in plot_list:
+            #     st.pyplot(fig)
+            label_X, label_data, predict_X, predict_data = tidy(config, data_gainer, logger, pred_result)
+            for i in range(len(config.label_columns)):
+                chart = get_chart(label_X, label_data[:, i], predict_X, predict_data[:, i])
+                st.altair_chart(chart.interactive(), use_container_width=False)
+
     except Exception:
         logger.error("Run Error", exc_info=True)
