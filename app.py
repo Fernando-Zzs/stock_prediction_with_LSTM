@@ -59,18 +59,24 @@ tab_chart, tab_data = st.tabs([":bar_chart: CHART", ":clipboard: DATA"])
 chart_placeholder = tab_chart.empty()
 data_placeholder = tab_data.empty()
 
-# TODO:运行前需要检查：do_continue_train变更时同时变更
 if st.sidebar.button("运行", type='primary', use_container_width=True):
     # 修改预测列需要联动修改其他参数
     config.label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(config.feature_columns, config.label_columns)
     config.output_size = len(config.label_columns)
+    if config.do_continue_train:
+        config.shuffle_train_data = False
+        config.batch_size = 1
+        config.continue_flag = "continue_"
 
+    # 前期准备工作
     logger = load_logger(config)
     module = None
     if config.used_frame == 'PyTorch':
         module = importlib.import_module("model.model_pytorch")
     else:
         module = importlib.import_module("model.model_tensorflow")
+
+    # 获取数据并根据配置做训练和预测
     try:
         np.random.seed(config.random_seed)  # 设置随机种子，保证可复现
         data_gainer = Data(config)
