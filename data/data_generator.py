@@ -3,7 +3,7 @@
 import akshare as ak
 from sklearn.model_selection import train_test_split
 
-from utils.index_calculator import *
+from prepocessing.index_calculator import *
 
 
 class Data:
