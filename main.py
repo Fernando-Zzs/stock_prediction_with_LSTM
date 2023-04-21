@@ -30,6 +30,7 @@ class Config:
     fq_method = "qfq"
     period = "daily"
 
+    all_columns = list(range(0, 29))
     feature_columns = list(range(1, 29))  # 要作为feature的列，按原数据从0开始计算，也可以用list 如 [2,4,6,8] 设置
     label_columns = [3, 4]  # 要预测的列，按原数据从0开始计算, 如同时预测第四，五列 最低价和最高价
     # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行因为feature不一定从0开始
@@ -158,14 +159,15 @@ def tidy(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
 
     label_X = range(origin_data.data_num - origin_data.train_num - origin_data.start_num_in_test)
     predict_X = [x + config.predict_day for x in label_X]
+    date_df = origin_data.date[-len(label_X):]
 
-    return label_X, label_data, predict_X, predict_data,
+    return label_X, label_data, predict_X, predict_data, date_df
 
 
 def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarray):
     label_column_num = len(config.label_columns)
     label_name = [origin_data.data_column_name[i] for i in config.label_in_feature_index]
-    label_X, label_data, predict_X, predict_data = tidy(config, origin_data, logger, predict_norm_data)
+    label_X, label_data, predict_X, predict_data, _ = tidy(config, origin_data, logger, predict_norm_data)
 
     plot_list = []  # 存储所有预测图的列表
     if not sys.platform.startswith('linux'):  # 无桌面的Linux下无法输出，如果是有桌面的Linux，如Ubuntu，可去掉这一行

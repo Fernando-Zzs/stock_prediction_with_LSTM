@@ -16,7 +16,7 @@ alt.themes.enable("streamlit")
 
 # 设置应用程序的标题和页眉
 st.set_page_config(page_title="Stock Price Predictor", page_icon=":chart_with_upwards_trend:", layout="wide")
-st.title("股票价格预测")
+
 # 创建侧边栏，用于用户输入模型参数
 st.sidebar.title("自定义预测参数")
 config = Config()
@@ -28,7 +28,7 @@ config.start_date = datetime.strftime(
 config.end_date = datetime.strftime(st.sidebar.date_input("结束日期", value=datetime.now(),
                                                           min_value=gap_period(config.start_date, 3, False)), "%Y%m%d")
 config.fq_method = view_options[
-    st.sidebar.radio("复权类型", ('前复权', '后复权'), horizontal=True, help="选择前复权能够更好地反映短期价格趋势，选择后复权能够更好地反映长期涨跌情况。")]
+    st.sidebar.radio("复权类型", ('前复权', '后复权'), horizontal=True, help="选择前复权能够更好地反映短期价格趋势，选择后复权能够更好地反映长期涨跌情况")]
 st.sidebar.markdown('---')
 
 with st.sidebar.expander("网络参数"):
@@ -54,55 +54,46 @@ st.sidebar.markdown('---')
 config.label_columns = [view_options[selected_option] for selected_option in
                         st.sidebar.multiselect("预测变量", ['开盘价', '收盘价', '最高价', '最低价'], ['收盘价'])]
 
+# 创建标签页，用于展示结果和数据管理
+tab_chart, tab_data = st.tabs([":bar_chart: CHART", ":clipboard: DATA"])
+chart_placeholder = tab_chart.empty()
+data_placeholder = tab_data.empty()
 
-def get_chart(x1, y1, x2, y2):
-    # 创建一个DataFrame，包含label_X, label_data, predict_X, predict_data四列数据
-    df = pd.DataFrame({
-        'label_X': x1,
-        'label_data': y1,
-        'predict_X': x2,
-        'predict_data': y2
-    })
 
-    # 创建一个用于悬停的selection对象
-    hover = alt.selection_single(
-        fields=['label_X', 'predict_X'],
-        nearest=True,
-        on='mouseover'
+def get_chart(date_arr, y1, y2, m):
+    # 生成日期对应的真实值和预测值数据框
+    date_arr = pd.to_datetime(date_arr)
+    date_arr2 = date_arr[m:]
+    date_offset = pd.offsets.BDay(n=m)
+    date_arr_extend = pd.date_range(date_arr2[-1] + date_offset, periods=m, freq='B')
+    date_arr2 = np.concatenate((date_arr2, date_arr_extend))
+    df1 = pd.DataFrame({'date': date_arr, 'actual_value': y1})
+    df2 = pd.DataFrame({'date': date_arr2, 'predict_value': y2})
+    data = pd.merge(df1, df2, on='date', how='outer')
+
+    # 创建基础图表
+    base = alt.Chart(data).encode(
+        x=alt.X("date:T", axis=alt.Axis(format="%Y/%m/%d"))
     )
-
-    line_label = alt.Chart(df).mark_line().encode(
-        x='label_X',
-        y='label_data',
-        color=alt.value('blue')
-    )
-
-    line_predict = alt.Chart(df).mark_line().encode(
-        x='predict_X',
-        y='predict_data',
-        color=alt.value('orange')
-    )
-
-    # 创建一个用于悬停的点图层
-    point = alt.Chart(df).mark_circle().encode(
-        x='label_X',
-        y='label_data',
-        opacity=alt.condition(hover, alt.value(1), alt.value(0))  # 根据悬停情况设置点的透明度
-    )
-
-    # 创建一个用于规则图标的图层
-    rule = alt.Chart(df).mark_rule(color='gray').encode(
-        x='label_X',
-        y='label_data',
-        opacity=alt.condition(hover, alt.value(0.3), alt.value(0)),
+    # 创建折线图层
+    line_actual = base.mark_line(color="blue").encode(y="actual_value")
+    line_predict = base.mark_line(color="orange").encode(y="predict_value")
+    # 创建交互层
+    selection = alt.selection_single(fields=["date"], nearest=True, on="mouseover", empty="none")
+    points_actual = line_actual.mark_point().encode(opacity=alt.condition(selection, alt.value(1), alt.value(0)))
+    points_predict = line_predict.mark_point().encode(opacity=alt.condition(selection, alt.value(1), alt.value(0)))
+    # 创建竖线图层
+    rule = alt.Chart(data).mark_rule(color="gray").encode(
+        x="date:T", opacity=alt.condition(selection, alt.value(0.5), alt.value(0)),
         tooltip=[
-            alt.Tooltip("label_X", title="Date"),
-            alt.Tooltip("label_data", title="Price"),
-        ],
-    ).add_selection(hover)
+            alt.Tooltip("date", title="日期"),
+            alt.Tooltip("actual_value", title="实际价格"),
+            alt.Tooltip("predict_value", title="预测价格"),
+        ]).add_selection(selection)
+    # 组合所有图层
+    chart = (line_actual + line_predict + points_actual + points_predict + rule).interactive()
 
-    # 将所有图层叠加在一起，并添加交互特性
-    return (line_label + line_predict + point + rule).interactive()
+    return data, chart
 
 
 # TODO:运行前需要检查：所有空都有填写,do_continue_train变更时同时变更
@@ -128,13 +119,11 @@ if st.sidebar.button("运行", type='primary', use_container_width=True):
         if config.do_predict:
             test_X, test_Y = data_gainer.get_test_data(return_label_data=True)
             pred_result = module.predict(config, test_X)  # 这里输出的是未还原的归一化预测数据
-            # plot_list = draw(config, data_gainer, logger, pred_result)
-            # for fig in plot_list:
-            #     st.pyplot(fig)
-            label_X, label_data, predict_X, predict_data = tidy(config, data_gainer, logger, pred_result)
+            _, label_data, _, predict_data, date_df = tidy(config, data_gainer, logger, pred_result)
             for i in range(len(config.label_columns)):
-                chart = get_chart(label_X, label_data[:, i], predict_X, predict_data[:, i])
-                st.altair_chart(chart.interactive(), use_container_width=False)
+                df, chart = get_chart(date_df, label_data[:, i], predict_data[:, i], config.predict_day)
+                data_placeholder.dataframe(data=df, use_container_width=True)
+                chart_placeholder.altair_chart(chart, use_container_width=True)
 
     except Exception:
         logger.error("Run Error", exc_info=True)

@@ -9,7 +9,7 @@ from utils.index_calculator import *
 class Data:
     def __init__(self, config):
         self.config = config
-        self.data, self.data_column_name = self.get_data()
+        self.date, self.data, self.data_column_name = self.get_data()
 
         self.data_num = self.data.shape[0]
         self.train_num = int(self.data_num * self.config.train_data_rate)
@@ -26,11 +26,12 @@ class Data:
     def get_data(self):  # 获取初始数据
         if self.config.debug_mode:
             init_data = pd.read_excel(self.config.train_data_path, nrows=self.config.debug_num,
-                                      usecols=self.config.feature_columns)
+                                      usecols=self.config.all_columns)
         else:
             init_data = self.get_from_web()
         init_data.dropna(inplace=True)
-        return init_data.values, init_data.columns.tolist()  # .columns.tolist() 是获取列名
+        return init_data.iloc[:, 0].values, init_data.iloc[:,
+                                            self.config.feature_columns].values, init_data.columns.tolist()
 
     def get_from_web(self):  # 从网上获取数据并计算指标
         df = ak.stock_zh_a_hist(symbol=self.config.stock_code, period=self.config.period,
@@ -45,7 +46,7 @@ class Data:
               .pipe(calculate_dmi)
               .pipe(calculate_bollinger_bands)
               .pipe(calculate_average_true_range))
-        return df.iloc[:, self.config.feature_columns]
+        return df.iloc[:, self.config.all_columns]
 
     def get_train_and_valid_data(self):
         feature_data = self.norm_data[:self.train_num]
