@@ -188,17 +188,6 @@ def draw(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     return plot_list
 
 
-# TODO:需要重构，放到其他位置
-view_options = {
-    '前复权': 'qfq',
-    '后复权': 'hfq',
-    '开盘价': 1,
-    '收盘价': 2,
-    '最高价': 3,
-    '最低价': 4
-}
-
-
 def main(config):
     logger = load_logger(config)
     try:

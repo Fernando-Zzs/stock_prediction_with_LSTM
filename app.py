@@ -8,9 +8,10 @@ import numpy as np
 import streamlit as st
 
 from data.data_generator import Data
-from main import Config, load_logger, tidy, view_options
+from main import Config, load_logger, tidy
 from prepocessing.date_util import calc_bdate, gap_period
 from view.chart_util import get_chart
+from view.config import view_options
 
 alt.themes.enable("streamlit")
 
@@ -48,7 +49,7 @@ with st.sidebar.expander("训练参数"):
     config.use_cuda = st.checkbox("使用GPU训练", value=False)
     config.do_continue_train = st.checkbox("持续训练", value=False, disabled=config.used_frame == 'TensorFlow',
                                            help="每次训练把上一次的final_state作为下一次的init_state")
-    config.debug_mode = st.checkbox("离线模式", value=False, help="不联网获取数据，请确保数据库为最新数据")
+    config.debug_mode = st.checkbox("离线模式", value=False, help="不联网获取数据，请确保数据库存在且为最新数据")
 
 st.sidebar.markdown('---')
 config.label_columns = [view_options[selected_option] for selected_option in

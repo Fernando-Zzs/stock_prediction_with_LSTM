@@ -3,6 +3,7 @@
 import akshare as ak
 from sklearn.model_selection import train_test_split
 
+from data.database_util import *
 from prepocessing.index_calculator import *
 
 
@@ -25,10 +26,10 @@ class Data:
 
     def get_data(self):  # 获取初始数据
         if self.config.debug_mode:
-            init_data = pd.read_excel(self.config.train_data_path, nrows=self.config.debug_num,
-                                      usecols=self.config.all_columns)
+            init_data = get_from_db(self.config.stock_code)
         else:
             init_data = self.get_from_web()
+            save_to_db(init_data, self.config.stock_code, False)
         init_data.dropna(inplace=True)
         return init_data.iloc[:, 0].values, init_data.iloc[:,
                                             self.config.feature_columns].values, init_data.columns.tolist()
