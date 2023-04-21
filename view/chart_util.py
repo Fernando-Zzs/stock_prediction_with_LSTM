@@ -1,7 +1,8 @@
 # -*- coding = utf-8 -*-
-import pandas as pd
 import altair as alt
 import numpy as np
+import pandas as pd
+import streamlit as st
 
 
 def get_chart(date_arr, y1, y2, m):
@@ -36,3 +37,8 @@ def get_chart(date_arr, y1, y2, m):
     chart = (line_actual + line_predict + points_actual + points_predict + rule).interactive()
 
     return data, chart
+
+
+@st.cache_data
+def convert_df(df):
+    return df.to_csv().encode('utf-8')
