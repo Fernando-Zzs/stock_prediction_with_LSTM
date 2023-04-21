@@ -8,6 +8,7 @@ import numpy as np
 import streamlit as st
 
 from data.data_generator import Data
+from data.database_util import *
 from main import Config, load_logger, tidy
 from prepocessing.date_util import calc_bdate, gap_period
 from view.chart_util import get_chart
@@ -56,9 +57,15 @@ config.label_columns = [view_options[selected_option] for selected_option in
                         st.sidebar.multiselect("预测变量", ['开盘价', '收盘价', '最高价', '最低价'], ['收盘价'])]
 
 # 创建标签页，用于展示结果和数据管理
-tab_chart, tab_data = st.tabs([":bar_chart: CHART", ":clipboard: DATA"])
+tab_chart, tab_data, tab_db = st.tabs([":bar_chart: CHART", ":clipboard: DATA", ":file_cabinet: DATABASE"])
 chart_placeholder = tab_chart.empty()
 data_placeholder = tab_data.empty()
+with tab_db:
+    search_query = st.text_input("请输入股票代码", placeholder="eg.000001", max_chars=6)
+    query = st.button("查询", type='secondary', use_container_width=True)
+    if query:
+        query_df = get_from_db(search_query)
+        st.dataframe(data=query_df, use_container_width=True)
 
 if st.sidebar.button("运行", type='primary', use_container_width=True):
     # 修改预测列需要联动修改其他参数
@@ -79,21 +86,22 @@ if st.sidebar.button("运行", type='primary', use_container_width=True):
 
     # 获取数据并根据配置做训练和预测
     try:
-        np.random.seed(config.random_seed)  # 设置随机种子，保证可复现
-        data_gainer = Data(config)
+        with st.spinner("正在加载中，请稍候..."):
+            np.random.seed(config.random_seed)  # 设置随机种子，保证可复现
+            data_gainer = Data(config)
 
-        if config.do_train:
-            train_X, valid_X, train_Y, valid_Y = data_gainer.get_train_and_valid_data()
-            module.train(config, logger, [train_X, train_Y, valid_X, valid_Y])
+            if config.do_train:
+                train_X, valid_X, train_Y, valid_Y = data_gainer.get_train_and_valid_data()
+                module.train(config, logger, [train_X, train_Y, valid_X, valid_Y])
 
-        if config.do_predict:
-            test_X, test_Y = data_gainer.get_test_data(return_label_data=True)
-            pred_result = module.predict(config, test_X)  # 这里输出的是未还原的归一化预测数据
-            _, label_data, _, predict_data, date_df = tidy(config, data_gainer, logger, pred_result)
-            for i in range(len(config.label_columns)):
-                df, chart = get_chart(date_df, label_data[:, i], predict_data[:, i], config.predict_day)
-                data_placeholder.dataframe(data=df, use_container_width=True)
-                chart_placeholder.altair_chart(chart, use_container_width=True)
+            if config.do_predict:
+                test_X, test_Y = data_gainer.get_test_data(return_label_data=True)
+                pred_result = module.predict(config, test_X)  # 这里输出的是未还原的归一化预测数据
+                _, label_data, _, predict_data, date_df = tidy(config, data_gainer, logger, pred_result)
+                for i in range(len(config.label_columns)):
+                    df, chart = get_chart(date_df, label_data[:, i], predict_data[:, i], config.predict_day)
+                    data_placeholder.dataframe(data=df, use_container_width=True)
+                    chart_placeholder.altair_chart(chart, use_container_width=True)
 
     except Exception:
         logger.error("Run Error", exc_info=True)
