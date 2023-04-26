@@ -1,6 +1,6 @@
 # -*- coding = utf-8 -*-
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def calculate_corr(df, target_column, corr_threshold=0.2, duplicate_threshold=0.95, random_seed=42):

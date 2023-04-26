@@ -4,8 +4,8 @@ import akshare as ak
 from sklearn.model_selection import train_test_split
 
 from data.database_util import *
-from prepocessing.index_calculator import *
 from prepocessing.corr_calculator import calculate_corr
+from prepocessing.index_calculator import *
 
 
 class Data:
