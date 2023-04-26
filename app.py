@@ -31,6 +31,8 @@ config.end_date = datetime.strftime(st.sidebar.date_input("结束日期", value=
                                                           min_value=gap_period(config.start_date, 3, False)), "%Y%m%d")
 config.fq_method = view_options[
     st.sidebar.radio("复权类型", ('前复权', '后复权'), horizontal=True, help="选择前复权能够更好地反映短期价格趋势，选择后复权能够更好地反映长期涨跌情况")]
+config.label_columns = [view_options[selected_option] for selected_option in
+                        st.sidebar.multiselect("预测变量", ['开盘价', '收盘价', '最高价', '最低价'], ['收盘价'])]
 st.sidebar.markdown('---')
 
 with st.sidebar.expander("网络参数"):
@@ -52,9 +54,13 @@ with st.sidebar.expander("训练参数"):
                                            help="每次训练把上一次的final_state作为下一次的init_state")
     config.debug_mode = st.checkbox("离线模式", value=False, help="不联网获取数据，请确保数据库存在且为最新数据")
 
-st.sidebar.markdown('---')
-config.label_columns = [view_options[selected_option] for selected_option in
-                        st.sidebar.multiselect("预测变量", ['开盘价', '收盘价', '最高价', '最低价'], ['收盘价'])]
+with st.sidebar.expander("预处理参数"):
+    config.do_corr_reduction = st.checkbox("自适应去冗余", value=False, disabled=len(config.label_columns) > 1,
+                                           help="在模型训练之前，根据数据的相关性进行去冗余，只能处理一个目标变量")
+    config.corr_threshold = st.slider("预测性阈值", min_value=0.0, max_value=1.0, step=0.05, value=0.2,
+                                      disabled=not config.do_corr_reduction, help="去冗余第一步：删除与目标变量的相关性低于该阈值的预测变量")
+    config.duplicate_threshold = st.slider("冗余性阈值", min_value=0.0, max_value=1.0, step=0.05, value=0.95,
+                                           disabled=not config.do_corr_reduction, help="去冗余第二步：删除特征间共线性高于该阈值的预测变量")
 
 # 创建标签页，用于展示结果和数据管理
 tab_chart, tab_data, tab_db = st.tabs([":bar_chart: CHART", ":clipboard: DATA", ":file_cabinet: DATABASE"])
@@ -66,14 +72,6 @@ with tab_db:
         st.dataframe(data=query_df, use_container_width=True)
 
 if st.sidebar.button("运行", type='primary', use_container_width=True):
-    # 修改预测列需要联动修改其他参数
-    config.label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(config.feature_columns, config.label_columns)
-    config.output_size = len(config.label_columns)
-    if config.do_continue_train:
-        config.shuffle_train_data = False
-        config.batch_size = 1
-        config.continue_flag = "continue_"
-
     # 前期准备工作
     logger = load_logger(config)
     module = None
@@ -81,12 +79,20 @@ if st.sidebar.button("运行", type='primary', use_container_width=True):
         module = importlib.import_module("model.model_pytorch")
     else:
         module = importlib.import_module("model.model_tensorflow")
-
     # 获取数据并根据配置做训练和预测
     try:
         with st.spinner("正在加载中，请稍候..."):
-            np.random.seed(config.random_seed)  # 设置随机种子，保证可复现
+            np.random.seed(config.random_seed)
             data_gainer = Data(config)
+
+            # 修改预测列需要联动修改其他参数
+            config.label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(config.feature_columns,
+                                                                                   config.label_columns)
+            config.output_size = len(config.label_columns)
+            if config.do_continue_train:
+                config.shuffle_train_data = False
+                config.batch_size = 1
+                config.continue_flag = "continue_"
 
             if config.do_train:
                 train_X, valid_X, train_Y, valid_Y = data_gainer.get_train_and_valid_data()
@@ -105,9 +111,9 @@ if st.sidebar.button("运行", type='primary', use_container_width=True):
                     df, chart = get_chart(date_df, label_data[:, i], predict_data[:, i], config.predict_day)
                     data_placeholder[i].dataframe(data=df, use_container_width=True)
                     download_data_placeholder[i].download_button(
-                        label="Download data as CSV", data=convert_df(df), file_name=f'{config.stock_code}.csv', mime='text/csv',
+                        label="Download data as CSV", data=convert_df(df), file_name=f'{config.stock_code}.csv',
+                        mime='text/csv',
                         use_container_width=True)
                     chart_placeholder[i].altair_chart(chart, use_container_width=True)
-
     except Exception:
         logger.error("Run Error", exc_info=True)

@@ -31,8 +31,8 @@ class Config:
     period = "daily"
 
     all_columns = list(range(0, 29))
-    feature_columns = list(range(1, 29))  # 要作为feature的列，按原数据从0开始计算，也可以用list 如 [2,4,6,8] 设置
-    label_columns = [3, 4]  # 要预测的列，按原数据从0开始计算, 如同时预测第四，五列 最低价和最高价
+    feature_columns = list(range(1, 29))  # 要作为feature的列
+    label_columns = [3, 4]  # 要预测的列
     # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行因为feature不一定从0开始
     label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(feature_columns, label_columns)
 
@@ -69,6 +69,11 @@ class Config:
         shuffle_train_data = False
         batch_size = 1
         continue_flag = "continue_"
+
+    # 相关性参数
+    do_corr_reduction = False
+    corr_threshold = 0.2
+    duplicate_threshold = 0.95
 
     # 训练模式
     debug_mode = False  # 调试模式下，是为了跑通代码，追求快

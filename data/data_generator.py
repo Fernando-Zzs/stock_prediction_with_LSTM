@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from data.database_util import *
 from prepocessing.index_calculator import *
+from prepocessing.corr_calculator import calculate_corr
 
 
 class Data:
@@ -31,6 +32,18 @@ class Data:
             init_data = self.get_from_web()
             save_to_db(init_data, self.config.stock_code, False)
         init_data.dropna(inplace=True)
+
+        # 如果删除相关性冗余的预测变量，则需要重置config中的feature_columns;label_columns及其联动项
+        if self.config.do_corr_reduction:
+            init_data, target_column = calculate_corr(init_data, self.config.label_columns, self.config.corr_threshold,
+                                                      self.config.duplicate_threshold)
+            self.config.label_columns = [init_data.columns.get_loc(target_column)]
+            self.config.feature_columns = list(range(1, init_data.shape[1]))
+            self.config.label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(self.config.feature_columns,
+                                                                                        self.config.label_columns)
+            self.config.input_size = len(self.config.feature_columns)
+            self.config.output_size = len(self.config.label_columns)
+
         return init_data.iloc[:, 0].values, init_data.iloc[:,
                                             self.config.feature_columns].values, init_data.columns.tolist()
 
