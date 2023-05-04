@@ -10,7 +10,7 @@ def calculate_corr(df, target_column, corr_threshold=0.2, duplicate_threshold=0.
     # 计算每个指标与目标变量之间的Pearson相关系数得分
     corr_scores = df.corrwith(df[target_column], method='pearson')
 
-    # 将Series转换为DataFrame并重命名列名
+    # 将Series转换为DataFrame并重置索引
     corr_scores_df = pd.DataFrame({'corr_scores': corr_scores}).reset_index()
 
     # 筛选相关性得分高于corr_threshold的指标

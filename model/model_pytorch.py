@@ -26,8 +26,9 @@ class Net(Module):
 
 def train(config, logger, train_and_valid_data):
     if config.do_train_visualized:
-        import visdom
-        vis = visdom.Visdom(env='model_pytorch')
+        from torch.utils.tensorboard import SummaryWriter
+        train_writer = SummaryWriter(config.log_save_path + "Train")
+        eval_writer = SummaryWriter(config.log_save_path + "Eval")
 
     train_X, train_Y, valid_X, valid_Y = train_and_valid_data
     train_X, train_Y = torch.from_numpy(train_X).float(), torch.from_numpy(train_Y).float()  # 先转为Tensor
@@ -41,8 +42,8 @@ def train(config, logger, train_and_valid_data):
     model = Net(config).to(device)  # 如果是GPU训练， .to(device) 会把模型/数据复制到GPU显存中
     if config.add_train:  # 如果是增量训练，会先加载原模型参数
         model.load_state_dict(torch.load(config.model_save_path + config.model_name))
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    criterion = torch.nn.MSELoss()  # 这两句是定义优化器和loss
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)  # 定义优化器
+    criterion = torch.nn.SmoothL1Loss()  # 定义loss
 
     valid_loss_min = float("inf")
     bad_epoch = 0
@@ -66,11 +67,11 @@ def train(config, logger, train_and_valid_data):
             loss = criterion(pred_Y, _train_Y)  # 计算loss
             loss.backward()  # 将loss反向传播
             optimizer.step()  # 用优化器更新参数
-            train_loss_array.append(loss.item())
+            train_loss = loss.item()
+            train_loss_array.append(train_loss)
+            if config.do_train_visualized and global_step % 50 == 0:  # 每五十步显示一次
+                train_writer.add_scalar('Train_Loss', train_loss, global_step)
             global_step += 1
-            if config.do_train_visualized and global_step % 100 == 0:  # 每一百步显示一次
-                vis.line(X=np.array([global_step]), Y=np.array([loss.item()]), win='Train_Loss',
-                         update='append' if global_step > 0 else None, name='Train', opts=dict(showlegend=True))
 
         # 以下为早停机制，当模型训练连续config.patience个epoch都没有使验证集预测效果提升时，就停止，防止过拟合
         model.eval()  # pytorch中，预测时要转换成预测模式
@@ -87,11 +88,9 @@ def train(config, logger, train_and_valid_data):
         valid_loss_cur = np.mean(valid_loss_array)
         logger.info("The train loss is {:.6f}. ".format(train_loss_cur) +
                     "The valid loss is {:.6f}.".format(valid_loss_cur))
-        if config.do_train_visualized:  # 第一个train_loss_cur太大，导致没有显示在visdom中
-            vis.line(X=np.array([epoch]), Y=np.array([train_loss_cur]), win='Epoch_Loss',
-                     update='append' if epoch > 0 else None, name='Train', opts=dict(showlegend=True))
-            vis.line(X=np.array([epoch]), Y=np.array([valid_loss_cur]), win='Epoch_Loss',
-                     update='append' if epoch > 0 else None, name='Eval', opts=dict(showlegend=True))
+        if config.do_train_visualized:
+            train_writer.add_scalar('Epoch_Loss', train_loss_cur, epoch + 1)
+            eval_writer.add_scalar('Epoch_Loss', valid_loss_cur, epoch + 1)
 
         if valid_loss_cur < valid_loss_min:
             valid_loss_min = valid_loss_cur

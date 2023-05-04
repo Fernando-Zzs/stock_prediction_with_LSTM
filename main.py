@@ -11,13 +11,13 @@ import numpy as np
 
 from data.data_generator import Data
 
-frame = "tensorflow"
+frame = "pytorch"
 if frame == "pytorch":
     from model.model_pytorch import train, predict
 elif frame == "tensorflow":
     from model.model_tensorflow import train, predict
 
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'  # tf和keras下会有很多tf的warning，但不影响训练
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'  # tf下会有很多tf的warning，但不影响训练
 else:
     raise Exception("Wrong frame seletion")
 
@@ -81,7 +81,7 @@ class Config:
 
     # 框架参数
     used_frame = frame  # 选择的深度学习框架，不同的框架模型保存后缀不一样
-    model_postfix = {"pytorch": ".pth", "keras": ".h5", "tensorflow": ".ckpt"}
+    model_postfix = {"pytorch": ".pth", "tensorflow": ".ckpt"}
     model_name = "model_" + continue_flag + used_frame + model_postfix[used_frame]
 
     # 路径参数
@@ -92,7 +92,7 @@ class Config:
     do_log_print_to_screen = True
     do_log_save_to_file = True  # 是否将config和训练过程记录到log
     do_figure_save = False
-    do_train_visualized = False  # 训练loss可视化，pytorch用visdom，tf用tensorboardX，实际上可以通用, keras没有
+    do_train_visualized = False  # 训练loss可视化，pytorch用tensorboard，tf用tensorboardX
     if not os.path.exists(model_save_path):
         os.makedirs(model_save_path)  # makedirs 递归创建目录
     if not os.path.exists(figure_save_path):
