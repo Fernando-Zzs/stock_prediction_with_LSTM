@@ -16,9 +16,6 @@ class Data:
         self.data_num = self.data.shape[0]
         self.train_num = int(self.data_num * self.config.train_data_rate)
 
-        # self.mean = np.mean(self.data, axis=0)  # 数据的均值和方差
-        # self.std = np.std(self.data, axis=0)
-        # self.norm_data = (self.data - self.mean) / self.std  # 归一化，去量纲
         self.min_val = np.min(self.data, axis=0)
         self.max_val = np.max(self.data, axis=0)
         self.norm_data = (self.data - self.min_val) / (self.max_val - self.min_val + 1e-8)

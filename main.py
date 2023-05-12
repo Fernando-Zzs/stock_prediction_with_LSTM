@@ -32,7 +32,7 @@ class Config:
 
     all_columns = list(range(0, 29))
     feature_columns = list(range(1, 29))  # 要作为feature的列
-    label_columns = [3, 4]  # 要预测的列
+    label_columns = [3]  # 要预测的列
     # label_in_feature_index = [feature_columns.index(i) for i in label_columns]  # 这样写不行因为feature不一定从0开始
     label_in_feature_index = (lambda x, y: [x.index(i) for i in y])(feature_columns, label_columns)
 
@@ -42,10 +42,10 @@ class Config:
     input_size = len(feature_columns)
     output_size = len(label_columns)
 
-    hidden_size = 128  # LSTM的隐藏层大小，也是输出大小
+    hidden_size = 16  # LSTM的隐藏层大小，也是输出大小
     lstm_layers = 2  # LSTM的堆叠层数
-    dropout_rate = 0.2  # dropout概率
-    time_step = 20  # 这个参数很重要，是设置用前多少天的数据来预测，也是LSTM的time step数，请保证训练数据量大于它
+    dropout_rate = 0.1  # dropout概率
+    time_step = 15  # 这个参数很重要，是设置用前多少天的数据来预测，也是LSTM的time step数，请保证训练数据量大于它
 
     # 训练参数
     do_train = True
@@ -58,7 +58,7 @@ class Config:
     valid_data_rate = 0.15  # 验证数据占训练数据比例，验证集在训练过程使用，为了做模型和参数选择
 
     batch_size = 64
-    learning_rate = 0.001
+    learning_rate = 0.01
     epoch = 20  # 整个训练集被训练多少遍，不考虑早停的前提下
     patience = 5  # 训练多少epoch，验证集没提升就停掉
     random_seed = 42  # 随机种子，保证可复现
@@ -71,12 +71,12 @@ class Config:
         continue_flag = "continue_"
 
     # 相关性参数
-    do_corr_reduction = False
-    corr_threshold = 0.2
-    duplicate_threshold = 0.95
+    do_corr_reduction = True
+    corr_threshold = 0.3
+    duplicate_threshold = 0.9
 
     # 训练模式
-    debug_mode = False  # 调试模式下，是为了跑通代码，追求快
+    debug_mode = True  # 调试模式下，是为了跑通代码，追求快
     debug_num = 500  # 仅用debug_num条数据来调试
 
     # 框架参数
@@ -156,7 +156,6 @@ def tidy(config: Config, origin_data: Data, logger, predict_norm_data: np.ndarra
     # logger.info("The mean squared error of stock {} is ".format(label_name) + str(loss_norm))
 
     loss = np.mean((label_data[config.predict_day:] - predict_data[:-config.predict_day]) ** 2, axis=0)
-    # loss_norm = loss / (origin_data.std[config.label_in_feature_index] ** 2)
     norm_factor = (origin_data.max_val[config.label_in_feature_index] - origin_data.min_val[
         config.label_in_feature_index]) ** 2
     loss_norm = loss * norm_factor

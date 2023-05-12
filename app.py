@@ -26,7 +26,7 @@ st.sidebar.markdown('---')
 config.stock_code = st.sidebar.text_input("股票代码", value='000001')
 config.start_date = datetime.strftime(
     st.sidebar.date_input("起始日期", value=gap_period(datetime.strftime(datetime.now(), "%Y%m%d"), 4, True),
-                          max_value=gap_period(config.end_date, 3, True)), "%Y%m%d")
+                          max_value=gap_period(config.end_date, 2, True)), "%Y%m%d")
 config.end_date = datetime.strftime(st.sidebar.date_input("结束日期", value=datetime.now(),
                                                           min_value=gap_period(config.start_date, 3, False)), "%Y%m%d")
 config.fq_method = view_options[
