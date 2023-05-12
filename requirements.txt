@@ -11,5 +11,4 @@ tensorboardX
 visdom
 akshare
 streamlit
-dateutil.relativedelta
 altair
